@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional , List
 from datetime import date
-from app.Schema.utilisateurs_schema import UserResponse
+from Schema.utilisateurs_schema import UserResponse
 
 class EnseignantCreate(BaseModel):
     specialite: Optional[str]
@@ -10,7 +10,7 @@ class EnseignantCreate(BaseModel):
     telephone: Optional[str]
     adresse: Optional[str]
     photo_url: Optional[str]
-    id_matiere: Optional[int]
+    id_matiere: Optional[List[int]] = []
     
 
 class EnseignantResponse(BaseModel):
@@ -23,6 +23,23 @@ class EnseignantResponse(BaseModel):
     photo_url: Optional[str]
     id_matiere: Optional[int]
     user: UserResponse
+
+class EnseignantUpdate(BaseModel):
+    specialite: Optional[str]
+    email_professionnel: Optional[EmailStr]
+    genre: Optional[str]
+    telephone: Optional[str]
+    adresse: Optional[str]
+    photo_url: Optional[str]
+
+class EnseignantDetail(BaseModel):
+    user: UserResponse
+    specialite: Optional[str]
+    email_professionnel: Optional[EmailStr]
+    genre: Optional[str]
+    telephone: Optional[str]
+    adresse: Optional[str]
+    photo_url: Optional[str]
 
     class Config:
         from_attributes = True

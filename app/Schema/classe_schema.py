@@ -1,7 +1,8 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 from Schema.utilisateurs_schema import UserResponse
+from Schema.enseignant_schema import EnseignantDetail
 
 class ClasseCreate(BaseModel):
     nom_classe: str
@@ -9,7 +10,7 @@ class ClasseCreate(BaseModel):
     filiere: str
     annee_scolaire: str
     effectif: Optional[int]
-    id_enseignant: Optional[int]
+    id_enseignant: Optional[List[int]] = []
     
 
 class ClasseResponse(BaseModel):
@@ -19,7 +20,8 @@ class ClasseResponse(BaseModel):
     filiere: str
     annee_scolaire: str
     effectif: Optional[int]
-    enseignant: Optional[UserResponse]
+    enseignants: Optional[List[EnseignantDetail]] = []
+    etudiants: Optional[List[UserResponse]] = []
 
     class Config:
        from_attributes = True

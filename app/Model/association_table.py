@@ -8,3 +8,4 @@ enseignant_classe = Table(
     Column("id_enseignant", Integer, ForeignKey("enseignants.id_enseignant"), primary_key=True),
     Column("id_classe", Integer, ForeignKey("classes.id_classe"), primary_key=True)
 )
+
