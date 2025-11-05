@@ -4,24 +4,24 @@ from DB.database import get_db
 from Model.cours_model import Cours
 from Schema.cours_schema import CoursCreate, CoursResponse
 from Sec.Auth import get_current_user
-from Model.utilisateur_model import UserRole
+from Model.utilisateur_model import User
 
 router = APIRouter()
 
 
 # 🧱 Créer un cours
 @router.post("/ajouter", response_model=CoursResponse, status_code=status.HTTP_201_CREATED)
-def create_cours(cours: CoursCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def create_cours(cours: CoursCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Seuls les profs et admins peuvent créer des cours
-    if current_user.role.value not in ["admin", "enseignant"]:
+    if current_user.role.value != "enseignant":
         raise HTTPException(status_code=403, detail="Accès refusé")
 
     new_cours = Cours(
         titre=cours.titre,
         contenu=cours.contenu,
         type_cours=cours.type_cours,
-        durree_estimee=cours.duree_estimee,
-        id_enseignant=cours.id_enseignant,
+        duree_estimee=cours.duree_estimee,
+        id_enseignant=current_user.id,
         id_matiere=cours.id_matiere,
         id_classe=cours.id_classe
     )
@@ -33,9 +33,12 @@ def create_cours(cours: CoursCreate, db: Session = Depends(get_db), current_user
 
 
 # 📜 Lister tous les cours
-@router.get("/", response_model=list[CoursResponse])
-def list_cours(db: Session = Depends(get_db)):
-    return db.query(Cours).all()
+@router.get("/enseignant/{id_enseignant}", response_model=list[CoursResponse])
+def list_cours(id_enseignant: int ,db: Session = Depends(get_db)):
+    cours = db.query(Cours).filter(Cours.id_enseignant == id_enseignant).all()
+    if not cours :
+        raise HTTPException(status_code=404, detail="Aucun cours")
+    return cours
 
 
 # 🔍 Récupérer un cours par ID
@@ -49,13 +52,13 @@ def get_cours(cours_id: int, db: Session = Depends(get_db)):
 
 # ✏️ Modifier un cours
 @router.put("/{cours_id}", response_model=CoursResponse)
-def update_cours(cours_id: int, updated_cours: CoursCreate, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+def update_cours(cours_id: int, updated_cours: CoursCreate, db: Session = Depends(get_db), current_user: User=Depends(get_current_user)):
     cours = db.query(Cours).filter(Cours.id_cours == cours_id).first()
     if not cours:
         raise HTTPException(status_code=404, detail="Cours non trouvé")
 
     # Seul le prof du cours ou l’admin peut le modifier
-    if current_user.role.value != "admin" and current_user.id != cours.id_prof:
+    if current_user.id != cours.id_enseignant:
         raise HTTPException(status_code=403, detail="Accès refusé")
 
     cours.titre = updated_cours.titre
@@ -71,14 +74,14 @@ def update_cours(cours_id: int, updated_cours: CoursCreate, db: Session = Depend
 
 
 # 🗑️ Supprimer un cours
-@router.delete("/{cours_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_cours(cours_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+@router.delete("/{cours_id}", status_code=status.HTTP_200_OK)
+def delete_cours(cours_id: int, db: Session = Depends(get_db), current_user: User =Depends(get_current_user)):
     cours = db.query(Cours).filter(Cours.id_cours == cours_id).first()
     if not cours:
         raise HTTPException(status_code=404, detail="Cours non trouvé")
 
     # Seul le prof du cours ou l’admin peut le supprimer
-    if current_user.role.value != "admin" and current_user.id != cours.id_prof:
+    if current_user.role.value != "admin" and current_user.id != cours.id_enseignant:
         raise HTTPException(status_code=403, detail="Accès refusé")
 
     db.delete(cours)

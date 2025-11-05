@@ -15,8 +15,8 @@ class Classe(Base):
     effectif = Column(Integer, nullable=False)
 
     # Relations
-    etudiants = relationship("Etudiant", back_populates="classe", cascade="all, delete-orphan")
-    enseignants = relationship("Enseignant", secondary=enseignant_classe, back_populates="classe")
+    etudiants = relationship("Etudiant", back_populates="classe")
+    enseignants = relationship("Enseignant", secondary=enseignant_classe, back_populates="classes")
     cours = relationship("Cours", back_populates="classe")
 
 # Import à la fin pour éviter les imports circulaires

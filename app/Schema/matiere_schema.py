@@ -5,7 +5,7 @@ from app.Schema.enseignant_schema import EnseignantResponse
 
 class MatiereCreate(BaseModel):
     nom_matiere: str
-    credits: Optional[int]
+    credit: Optional[int]
     semestre: Optional[str]
     photo_url: Optional[str]
     id_enseignant: Optional[int]
@@ -13,10 +13,10 @@ class MatiereCreate(BaseModel):
 class MatiereResponse(BaseModel):
     id_matiere: int
     nom_matiere: str
-    credits: Optional[int]
+    credit: Optional[int]
     semestre: Optional[str]
     photo_url: Optional[str]
-    enseignant: Optional[EnseignantResponse]
+    id_enseignant: Optional[EnseignantResponse]
 
     class Config:
         from_attributes = True

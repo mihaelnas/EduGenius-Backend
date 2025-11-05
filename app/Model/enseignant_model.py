@@ -17,8 +17,8 @@ class Enseignant(Base):
 
     # Relation
     user = relationship("User", back_populates="enseignants", foreign_keys=[id_enseignant])
-    matieres = relationship("Matiere", back_populates="enseignants")
-    cours = relationship("Cours", back_populates="enseignants")
+    matieres = relationship("Matiere", back_populates="enseignant")
+    cours = relationship("Cours", back_populates="enseignant")
     classe = relationship("Classe", secondary=enseignant_classe, back_populates="enseignants")
 
 from Model.utilisateur_model import User

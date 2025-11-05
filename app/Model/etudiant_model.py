@@ -15,7 +15,7 @@ class Etudiant(Base):
     niveau_etude = Column(String, nullable=False)
     filiere = Column(String, nullable=False)
     photo_url = Column(String, nullable=True)
-    id_classe = Column(Integer, ForeignKey("classes.id_classe"), nullable=True)
+    id_classe = Column(Integer, ForeignKey("classes.id_classe", ondelete="SET NULL"), nullable=True , )
     
     # Relation
     user = relationship("User", back_populates="etudiants", foreign_keys=[id_etudiant])

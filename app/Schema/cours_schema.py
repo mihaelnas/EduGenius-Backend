@@ -29,8 +29,6 @@ class CoursResponse(BaseModel):
     id_enseignant: Optional[int]
     id_matiere: Optional[int]
     id_classe: Optional[int]
-    
-    
     classe: Optional[ClasseResponse]
 
     class Config:
