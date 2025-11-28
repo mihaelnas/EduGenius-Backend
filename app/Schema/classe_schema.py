@@ -1,9 +1,9 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import date
-from Schema.utilisateurs_schema import UserResponse
-from Schema.enseignant_schema import EnseignantDetail
-from Schema.etudiant_schema import EtudiantDetail
+from app.Schema.utilisateurs_schema import UserResponse
+from app.Schema.enseignant_schema import EnseignantDetail
+from app.Schema.etudiant_schema import EtudiantDetail
 
 class ClasseCreate(BaseModel):
     nom_classe: str

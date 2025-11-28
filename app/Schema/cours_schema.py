@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 from enum import Enum
 from datetime import datetime
-from Schema.classe_schema import ClasseResponse
+from app.Schema.classe_schema import ClasseResponse
 
 
 class TypeCours(str, Enum):

@@ -1,17 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
-from DB.database import get_db
-from Model.classe_model import Classe
-from Schema.classe_schema import ClasseCreate, ClasseResponse
-from Sec.Auth import get_current_user
-from Model.classe_model import Classe
-from Model.etudiant_model import Etudiant 
-from Model.enseignant_model import Enseignant
-from Schema.classe_schema import ClasseCreate , ClasseResponse
-from Model.utilisateur_model import User
+from app.DB.database import get_db
+from app.Model.classe_model import Classe
+from app.Schema.classe_schema import ClasseCreate, ClasseResponse
+from app.Schema.utilisateurs_schema import UserResponse
+from app.Schema.etudiant_schema import EtudiantDetail
+from app.Sec.Auth import get_current_user
+from app.Model.classe_model import Classe
+from app.Model.etudiant_model import Etudiant 
+from app.Model.enseignant_model import Enseignant
+from app.Schema.classe_schema import ClasseCreate , ClasseResponse
+from app.Model.utilisateur_model import User
 
+router = APIRouter(prefix="/dashboard/admin/classes", tags=["Classes"])
 
-router = APIRouter()
 
 
 # ✅ Créer une classe
@@ -50,7 +52,7 @@ async def create_class(
     return new_classe
 
 # ✅ Lister toutes les classes
-@router.get("/classes", response_model=list[ClasseResponse])
+@router.get("/", response_model=list[ClasseResponse])
 async def list_classes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -243,3 +245,38 @@ async def remove_student_from_class(
     db.commit()
     db.refresh(classe)
     return classe
+
+# Lister les étudiants d'une classe
+@router.get("/etudiants_classe/{classe_id}", response_model=list[EtudiantDetail])
+async def list_students_in_class(
+    classe_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value != "admin" and current_user.role.value != "enseignant":
+        raise HTTPException(status_code=403, detail="Accès réservé à l’administrateur")
+
+    classe = db.query(Classe).filter(Classe.id_classe == classe_id).first()
+    if not classe:
+        raise HTTPException(status_code=404, detail="Classe introuvable")
+
+    etudiants = db.query(Etudiant).filter(Etudiant.id_classe == classe_id).all()
+    return [etudiant for etudiant in etudiants]
+
+# Lister les enseignants d'une classe
+@router.get("/enseignants_classe/{classe_id}", response_model=list[UserResponse])
+async def list_teachers_in_class(
+    classe_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role.value != "admin" and current_user.role.value != "enseignant" and current_user.role != "etudiant":
+        raise HTTPException(status_code=403, detail="Accès réservé à l’administrateur")
+
+    classe = db.query(Classe).filter(Classe.id_classe == classe_id).first()
+    if not classe:
+        raise HTTPException(status_code=404, detail="Classe introuvable")
+
+    enseignants = classe.enseignants
+    return [enseignant for enseignant in enseignants]
+

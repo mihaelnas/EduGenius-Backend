@@ -7,6 +7,10 @@ class UserRole(str, Enum):
     enseignant = "enseignant"
     admin = "admin"
 
+class UserStatus(str, Enum):
+    actif = "actif"
+    inactif = "inactif"
+
 class UserCreate(BaseModel):
     nom: str
     prenom: str
@@ -21,14 +25,18 @@ class UserResponse(BaseModel):
     nom_utilisateur: str
     email: EmailStr
     mot_de_passe: str
+    status: UserStatus
     role: UserRole
 
+    class Config:
+        from_attributes = True 
+
 class UserUpdate(BaseModel):
-    nom: Optional[str]
-    prenom: Optional[str]
-    nom_utilisateur: Optional[str]
-    email: Optional[EmailStr]
-    mot_de_passe: Optional[str]
+    nom: Optional[str] = None
+    prenom: Optional[str] = None
+    nom_utilisateur: Optional[str] = None
+    email: Optional[EmailStr] = None
+    mot_de_passe: Optional[str] = None
 
     class Config:
-        from_attributes = True
+        from_attributes = True 

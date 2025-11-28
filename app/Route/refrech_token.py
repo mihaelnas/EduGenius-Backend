@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Response, HTTPException, status
-from Sec.Auth import create_access_token, SECRET_KEY, ALGORITHM
+from app.Sec.Auth import create_access_token, SECRET_KEY, ALGORITHM
 from jose import jwt, JWTError
 
 router = APIRouter()

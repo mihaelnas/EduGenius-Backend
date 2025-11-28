@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
-from DB.database import Base
-from Model.association_table import enseignant_classe
+from app.DB.database import Base
+from app.Model.association_table import enseignant_classe
 
 class Enseignant(Base):
     __tablename__ = "enseignants"
@@ -17,11 +17,13 @@ class Enseignant(Base):
 
     # Relation
     user = relationship("User", back_populates="enseignants", foreign_keys=[id_enseignant])
-    matieres = relationship("Matiere", back_populates="enseignant")
-    cours = relationship("Cours", back_populates="enseignant")
-    classe = relationship("Classe", secondary=enseignant_classe, back_populates="enseignants")
+    matieres = relationship("Matiere", back_populates="enseignants")
+    cours = relationship("Cours", back_populates="enseignants")
+    classes = relationship("Classe", secondary=enseignant_classe, back_populates="enseignants")
+    evenements = relationship("Evenement", back_populates="enseignants")
 
-from Model.utilisateur_model import User
-from Model.matiere_model import Matiere
-from Model.cours_model import Cours
-from Model.classe_model import Classe
+from app.Model.utilisateur_model import User
+from app.Model.matiere_model import Matiere
+from app.Model.cours_model import Cours
+from app.Model.classe_model import Classe
+from app.Model.planning_model import Evenement

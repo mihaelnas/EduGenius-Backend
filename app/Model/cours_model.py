@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, Text, Enum, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from DB.database import Base
+from app.DB.database import Base
 import enum
 
 class TypeCours(enum.Enum):
@@ -26,7 +26,7 @@ class Cours(Base):
     enseignants = relationship("Enseignant", back_populates="cours", foreign_keys=[id_enseignant])
     matieres = relationship("Matiere", back_populates="cours", foreign_keys=[id_matiere])
     classe = relationship("Classe", back_populates="cours", foreign_keys=[id_classe])
-
-from Model.enseignant_model import Enseignant
-from Model.matiere_model import Matiere
-from Model.classe_model import Classe
+    evenements = relationship("Evenement", back_populates="cours")
+from app.Model.enseignant_model import Enseignant
+from app.Model.matiere_model import Matiere
+from app.Model.classe_model import Classe

@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
-from DB.database import Base
+from app.DB.database import Base
 
 class Etudiant(Base):
     __tablename__ = "etudiants"
@@ -19,7 +19,7 @@ class Etudiant(Base):
     
     # Relation
     user = relationship("User", back_populates="etudiants", foreign_keys=[id_etudiant])
-    classe = relationship("Classe", back_populates="etudiants", foreign_keys=[id_classe])
+    classes = relationship("Classe", back_populates="etudiants", foreign_keys=[id_classe])
 
-from Model.utilisateur_model import User
-from Model.classe_model import Classe
+from app.Model.utilisateur_model import User
+from app.Model.classe_model import Classe

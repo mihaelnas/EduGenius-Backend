@@ -1,16 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from Sec.Auth import get_current_user
-from DB.database import get_db
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Body 
+from typing import Optional
+from app.Sec.Auth import get_current_user
+from app.DB.database import get_db
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from Model.utilisateur_model import User, UserRole
-from Schema.utilisateurs_schema import UserCreate, UserResponse, UserUpdate
-from Model.classe_model import Classe
-from Schema.classe_schema import ClasseCreate, ClasseResponse
-from Schema.etudiant_schema import EtudiantCreate, EtudiantUpdate , EtudiantDetail
-from Schema.enseignant_schema import EnseignantCreate, EnseignantUpdate , EnseignantDetail
-from Model.etudiant_model import Etudiant
-from Model.enseignant_model import Enseignant
+from app.Model.utilisateur_model import User, UserRole, UserStatus
+from app.Schema.utilisateurs_schema import UserCreate, UserResponse, UserUpdate
+from app.Schema.etudiant_schema import EtudiantCreate, EtudiantUpdate , EtudiantDetail , AddStudentRequest , StudentUpdateRequest
+from app.Schema.enseignant_schema import EnseignantCreate, EnseignantUpdate , EnseignantDetail , AddProfessorRequest , ProfessorUpdateRequest
+from app.Model.etudiant_model import Etudiant
+from app.Model.enseignant_model import Enseignant
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -28,9 +27,12 @@ def admin_dashboard(current_user: User = Depends(get_current_user)):
 
 # ✅ Ajouter un professeur (seulement par un admin)
 @router.post("/ajouter_professeur", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def add_professor(enseignant:EnseignantCreate ,user: UserCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def add_professor(data:AddProfessorRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Access forbidden")
+
+    user = data.user
+    enseignant = data.enseignant
 
     db_user = db.query(User).filter((User.email == user.email) | (User.nom_utilisateur == user.nom_utilisateur)).first()
     if db_user:
@@ -77,74 +79,124 @@ async def list_professors(
     profs = db.query(User).filter(User.role == UserRole.enseignant).all()
     return profs
 
-# ✅ Modifier un professeur
-@router.put("/modifier_professeur/{prof_id}", response_model=UserResponse)
+
+
+@router.put("/modifier_professeur/{prof_id}", response_model=EnseignantDetail)
 async def update_professor(
     prof_id: int,
-    user_update: UserUpdate,
-    enseignant_update:EnseignantUpdate,
+    payload: ProfessorUpdateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role.value != "admin":
-        raise HTTPException(status_code=403, detail="Action réservée à l’administrateur")
+    if current_user.role != UserRole.admin:
+        raise HTTPException(403, "Action réservée à l’administrateur")
 
-    prof = db.query(User).filter(User.id == prof_id, User.role == UserRole.enseignant).first()
+    prof = db.query(User).filter(
+        User.id == prof_id,
+        User.role == UserRole.enseignant
+    ).first()
+
     if not prof:
-        raise HTTPException(status_code=404, detail="Professeur introuvable")
+        raise HTTPException(404, "Professeur introuvable")
 
-    # Mise à jour des champs
-    if user_update.nom:
-        prof.nom = user_update.nom
-    if user_update.prenom:
-        prof.prenom = user_update.prenom
-    if user_update.nom_utilisateur:
-        existe_user = db.query(User).filter(User.nom_utilisateur == user_update.nom_utilisateur, User.id != prof_id).first()
-        if existe_user:
-            raise HTTPException(status_code=400, detail="Nom d'utilisateur déjà utilisé")
-        prof.nom_utilisateur = user_update.nom_utilisateur
-    if user_update.email:
-        existe_email = db.query(User).filter(User.email == user_update.email, User.id != prof_id).first()
-        if existe_email:
-            raise HTTPException(status_code=400, detail="Email déjà utilisé")
-        prof.email = user_update.email
-    if user_update.mot_de_passe:
-        prof.mot_de_passe = pwd_context.hash(user_update.mot_de_passe)
-    
-    db.commit()
-    db.refresh(prof)
+    details = db.query(Enseignant).filter(
+        Enseignant.id_enseignant == prof_id
+    ).first()
 
-    enseignant = db.query(Enseignant).filter(Enseignant.id_enseignant == prof.id).first()
-    if not enseignant:
-        raise HTTPException(status_code=404, detail="Détails du professeur introuvables")
-    if enseignant_update.specialite:
-        enseignant.specialite = enseignant_update.specialite
-    if enseignant_update.email_professionnel:
-        existe_email = db.query(Enseignant).filter(Enseignant.email_professionnel == enseignant_update.email_professionnel, Enseignant.id_enseignant != prof.id).first()
-        if existe_email:
-            raise HTTPException(status_code=400, detail="Email professionnel déjà utilisé")
-        enseignant.email_professionnel = enseignant_update.email_professionnel
-    if enseignant_update.genre:
-        enseignant.genre = enseignant_update.genre
-    if enseignant_update.telephone:
-        existe_num = db.query(Enseignant).filter(Enseignant.telephone == enseignant_update.telephone, Enseignant.id_enseignant != prof.id).first()
-        if existe_num:
-            raise HTTPException(status_code=400, detail="Numéro de téléphone déjà utilisé")
-        enseignant.telephone = enseignant_update.telephone
-    if enseignant_update.adresse:
-        enseignant.adresse = enseignant_update.adresse
-    if enseignant_update.photo_url:
-        enseignant.photo_url = enseignant_update.photo_url 
+    if not details:
+        raise HTTPException(404, "Détails du professeur introuvables")
 
-    db.commit()
-    db.refresh(enseignant)
+    user_update = payload.user
+    ens_update = payload.enseignant
 
+    # Normalisation téléphone
+    def normalize_phone(phone: Optional[str]):
+        import re
+        if not phone:
+            return None
+        return re.sub(r"\D", "", phone)
 
-    return prof
+    try:
+        # ------------------ USER UPDATE ------------------
+        if user_update:
+            if user_update.nom is not None:
+                prof.nom = user_update.nom
+            if user_update.prenom is not None:
+                prof.prenom = user_update.prenom
+            if user_update.nom_utilisateur is not None:
+                existe = db.query(User).filter(
+                    User.nom_utilisateur == user_update.nom_utilisateur,
+                    User.id != prof_id
+                ).first()
+                if existe:
+                    raise HTTPException(409, "Nom d'utilisateur déjà utilisé")
+                prof.nom_utilisateur = user_update.nom_utilisateur
+            if user_update.email is not None:
+                existe = db.query(User).filter(
+                    User.email == user_update.email,
+                    User.id != prof_id
+                ).first()
+                if existe:
+                    raise HTTPException(409, "Email déjà utilisé")
+                prof.email = user_update.email
+            if user_update.mot_de_passe is not None:
+                prof.mot_de_passe = pwd_context.hash(user_update.mot_de_passe)
 
+        # ------------------ ENSEIGNANT UPDATE ------------------
+        if ens_update:
+            if ens_update.specialite is not None:
+                details.specialite = ens_update.specialite
+            if ens_update.email_professionnel is not None:
+                existe = db.query(Enseignant).filter(
+                    Enseignant.email_professionnel == ens_update.email_professionnel,
+                    Enseignant.id_enseignant != prof_id
+                ).first()
+                if existe:
+                    raise HTTPException(409, "Email professionnel déjà utilisé")
+                details.email_professionnel = ens_update.email_professionnel
+            if ens_update.genre is not None:
+                details.genre = ens_update.genre
+            if ens_update.telephone is not None:
+                tel = normalize_phone(ens_update.telephone)
+                if tel:
+                    existe = db.query(Enseignant).filter(
+                        Enseignant.telephone == tel,
+                        Enseignant.id_enseignant != prof_id
+                    ).first()
+                    if existe:
+                        raise HTTPException(409, "Numéro de téléphone déjà utilisé")
+                    details.telephone = tel
+            if ens_update.adresse is not None:
+                details.adresse = ens_update.adresse
+            if ens_update.photo_url is not None:
+                details.photo_url = ens_update.photo_url
+     
+        # Commit toutes les modifications
+        db.commit()
+        db.refresh(prof)
+        db.refresh(details)
+
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        import logging, traceback
+        logging.error(traceback.format_exc())
+        raise HTTPException(500, "Erreur lors de la mise à jour du professeur")
+
+    return EnseignantDetail(
+        user=UserResponse(**prof.__dict__),
+        specialite=details.specialite,
+        email_professionnel=details.email_professionnel,
+        genre=details.genre,
+        telephone=details.telephone,
+        adresse=details.adresse,
+        photo_url=details.photo_url,
+    )
 
 # ✅ Supprimer un professeur
-@router.delete("/supprimer_professeur/{prof_id}", status_code=status.HTTP_200_OK)
+@router.delete("/supprimer_professeur/{prof_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_professor(
     prof_id: int,
     db: Session = Depends(get_db),
@@ -163,7 +215,7 @@ async def delete_professor(
 
     db.delete(enseignant)
     db.commit()
-    return status.HTTP_200_OK
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # Details d'un professeur
@@ -173,7 +225,7 @@ async def get_professor_details(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role.value != "admin":
+    if current_user.role.value != "admin" and current_user.role.value != "enseignant":
         raise HTTPException(status_code=403, detail="Accès réservé à l’administrateur")
 
     prof = db.query(Enseignant).filter(Enseignant.id_enseignant == prof_id).first()
@@ -187,11 +239,14 @@ async def get_professor_details(
 # ✅ Ajouter un étudiant
 @router.post("/ajouter_etudiant", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def add_student(
-    user: UserCreate,
-    etudiant: EtudiantCreate,
+    data:AddStudentRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    user = data.user
+    etudiant = data.etudiant
+
+
     if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Action réservée à l’administrateur")
 
@@ -210,7 +265,9 @@ async def add_student(
         nom_utilisateur=user.nom_utilisateur,
         email=user.email,
         mot_de_passe=hashed_password,
+        status=UserStatus.inactif,
         role=UserRole.etudiant
+        
     )
 
     db.add(new_student)
@@ -235,72 +292,142 @@ async def add_student(
     return new_student
 
 
-# ✅ Modifier un étudiant
-@router.put("/modifier_etudiant/{etudiant_id}", response_model=UserResponse)
+
+@router.put("/modifier_etudiant/{etudiant_id}", response_model=EtudiantDetail)
 async def update_student(
     etudiant_id: int,
-    user_update: UserUpdate,
-    etudiant_update: EtudiantUpdate,
+    payload: StudentUpdateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role.value != "admin":
+    # --- Sécurité ---
+    if current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Action réservée à l’administrateur")
 
-    etudiant = db.query(User).filter(User.id == etudiant_id, User.role == UserRole.etudiant).first()
+    # --- Récupération User ---
+    etudiant = db.query(User).filter(
+        User.id == etudiant_id,
+        User.role == UserRole.etudiant
+    ).first()
+
     if not etudiant:
         raise HTTPException(status_code=404, detail="Étudiant introuvable")
 
-    if user_update.nom:
-        etudiant.nom = user_update.nom
-    if user_update.prenom:
-        etudiant.prenom = user_update.prenom
-    if user_update.nom_utilisateur:
-        existe_user = db.query(User).filter(User.nom_utilisateur == user_update.nom_utilisateur, User.id != etudiant_id).first()
-        if existe_user:
-            raise HTTPException(status_code=400, detail="Nom d'utilisateur déjà utilisé")
-        etudiant.nom_utilisateur = user_update.nom_utilisateur
-    if user_update.email:
-        existe_email = db.query(User).filter(User.email == user_update.email, User.id != etudiant_id).first()
-        if existe_email:
-            raise HTTPException(status_code=400, detail="Email déjà utilisé")
-        etudiant.email = user_update.email
-    if user_update.mot_de_passe:
-        etudiant.mot_de_passe = pwd_context.hash(user_update.mot_de_passe)
+    # --- Récupération détails ---
+    details = db.query(Etudiant).filter(
+        Etudiant.id_etudiant == etudiant_id
+    ).first()
 
-    db.commit()
-    db.refresh(etudiant)
-    
-    students = db.query(Etudiant).filter(Etudiant.id_etudiant == etudiant.id).first()
-    if not students:
+    if not details:
         raise HTTPException(status_code=404, detail="Détails de l'étudiant introuvables")
-    
 
-    if etudiant_update.matricule:
-        exist_matricule = db.query(Etudiant).filter(Etudiant.matricule == etudiant_update.matricule, Etudiant.id_etudiant != etudiant.id).first()
-        if exist_matricule:
-            raise HTTPException(status_code=400, detail="Matricule déjà utilisé")
-        students.matricule = etudiant_update.matricule
-    if etudiant_update.date_naissance:
-        students.date_naissance = etudiant_update.date_naissance
-    if etudiant_update.genre:
-        students.genre = etudiant_update.genre
-    if etudiant_update.adresse:
-        students.adresse = etudiant_update.adresse
-    if etudiant_update.telephone:
-        exist_matricule = db.query(Etudiant).filter(Etudiant.telephone == etudiant_update.telephone, Etudiant.id_etudiant != etudiant.id).first()
-        if exist_matricule:
-            raise HTTPException(status_code=400, detail="Numéro de téléphone déjà utilisé")
-        students.telephone = etudiant_update.telephone
-    if etudiant_update.photo_url:
-        students.photo_url = etudiant_update.photo_url
-    if etudiant_update.filiere:
-        students.filiere = etudiant_update.filiere
+    user_update = payload.user
+    etu_update = payload.etudiant
 
-    db.commit()
-    db.refresh(students)
+    # --- Normalisation téléphone ---
+    def normalize_phone(phone: str | None):
+        import re
+        if not phone:
+            return None
+        return re.sub(r"\D", "", phone)
 
-    return etudiant
+    # ---------------- TRANSACTION ATOMIQUE ----------------
+    try:
+        # Pas besoin de `with db.begin()`, car Session est déjà transactionnelle par défaut
+        # ---------- UPDATE USER ----------
+        if user_update.nom is not None:
+            etudiant.nom = user_update.nom
+
+        if user_update.prenom is not None:
+            etudiant.prenom = user_update.prenom
+
+        if user_update.nom_utilisateur is not None:
+            existe = db.query(User).filter(
+                User.nom_utilisateur == user_update.nom_utilisateur,
+                User.id != etudiant_id
+            ).first()
+            if existe:
+                raise HTTPException(409, "Nom d'utilisateur déjà utilisé")
+            etudiant.nom_utilisateur = user_update.nom_utilisateur
+
+        if user_update.email is not None:
+            existe = db.query(User).filter(
+                User.email == user_update.email,
+                User.id != etudiant_id
+            ).first()
+            if existe:
+                raise HTTPException(409, "Email déjà utilisé")
+            etudiant.email = user_update.email
+
+        if user_update.mot_de_passe is not None:
+            etudiant.mot_de_passe = pwd_context.hash(user_update.mot_de_passe)
+
+        # ---------- UPDATE ÉTUDIANT ----------
+        if etu_update.matricule is not None:
+            existe = db.query(Etudiant).filter(
+                Etudiant.matricule == etu_update.matricule,
+                Etudiant.id_etudiant != etudiant_id
+            ).first()
+            if existe:
+                raise HTTPException(409, "Matricule déjà utilisé")
+            details.matricule = etu_update.matricule
+
+        if etu_update.date_naissance is not None:
+            details.date_naissance = etu_update.date_naissance
+
+        if etu_update.genre is not None:
+            details.genre = etu_update.genre
+
+        if etu_update.lieu_naissance is not None:
+            details.lieu_naissance = etu_update.lieu_naissance
+
+        if etu_update.niveau_etude is not None:
+            details.niveau_etude = etu_update.niveau_etude
+
+        if etu_update.adresse is not None:
+            details.adresse = etu_update.adresse
+
+        if etu_update.telephone is not None:
+            tel = normalize_phone(etu_update.telephone)
+            if tel:
+                existe = db.query(Etudiant).filter(
+                    Etudiant.telephone == tel,
+                    Etudiant.id_etudiant != etudiant_id
+                ).first()
+                if existe:
+                    raise HTTPException(409, "Numéro de téléphone déjà utilisé")
+                details.telephone = tel
+
+        if etu_update.photo_url is not None:
+            details.photo_url = etu_update.photo_url
+
+        if etu_update.filiere is not None:
+            details.filiere = etu_update.filiere
+
+        # Commit explicit
+        db.commit()
+        db.refresh(etudiant)
+        db.refresh(details)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, detail=f"Erreur lors de la mise à jour de l'étudiant: {str(e)}")
+
+    # --- Retour avec Pydantic v2 ---
+    return EtudiantDetail(
+        user=UserResponse(**etudiant.__dict__),  # ⚡ Pydantic v2
+        matricule=details.matricule,
+        date_naissance=details.date_naissance,
+        genre=details.genre,
+        lieu_naissance=details.lieu_naissance,
+        niveau_etude=details.niveau_etude,
+        adresse=details.adresse,
+        telephone=details.telephone,
+        photo_url=details.photo_url,
+        filiere=details.filiere
+    )
 
 
 # ✅ Supprimer un étudiant
@@ -313,7 +440,7 @@ async def delete_student(
     if current_user.role.value != "admin":
         raise HTTPException(status_code=403, detail="Action réservée à l’administrateur")
 
-    etudiant = db.query(User).filter(User.id == etudiant_id, User.role == UserRole.etudiant).first()
+    etudiant = db.query(User).filter(User.id == etudiant_id, User.role == UserRole.etudiant.value).first()
     if not etudiant:
         raise HTTPException(status_code=404, detail="Étudiant introuvable")
     students = db.query(Etudiant).filter(Etudiant.id_etudiant == etudiant.id).first()
@@ -349,7 +476,7 @@ async def get_student_details(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if current_user.role.value != "admin":
+    if current_user.role.value != "admin" and current_user.role.value != "enseignant":
         raise HTTPException(status_code=403, detail="Accès réservé à l’administrateur")
 
     etudiant = db.query(Etudiant).filter(Etudiant.id_etudiant == etudiant_id).first()
